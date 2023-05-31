@@ -1,6 +1,6 @@
-import { API, GitExtension } from "./import/git";
+import path from "path";
 import vscode from "vscode";
-import path from "path"
+import { API, GitExtension } from "./import/git";
 
 export namespace Tools {
   export class SqlError extends Error {
@@ -116,12 +116,12 @@ export namespace Tools {
     return rows;
   }
 
-  export function makeid() {
+  export function makeid(length: number = 8) {
     let text = `O_`;
     const possible =
       `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789`;
 
-    for (let i = 0; i < 8; i++)
+    for (let i = 0; i < length; i++)
       text += possible.charAt(Math.floor(Math.random() * possible.length));
 
     return text;
@@ -161,7 +161,7 @@ export namespace Tools {
         return part
       }
     })
-    .join(path.posix.sep);
+      .join(path.posix.sep);
 
     return path.posix.join(correctedDir, pathInfo.base);
   }
