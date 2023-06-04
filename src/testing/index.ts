@@ -1,22 +1,22 @@
-import vscode from "vscode";
 import { env } from "process";
+import vscode from "vscode";
 import { instance } from "../instantiate";
-import { ConnectionSuite } from "./connection";
-import { ContentSuite } from "./content";
-import { ToolsSuite } from "./tools";
+import { DeploymentSuite } from "./deployment";
 import { TestSuitesTreeProvider } from "./testCasesTree";
-import { ILEErrorSuite } from "./ileErrors";
 
-const suites : TestSuite[] = [
-  ConnectionSuite,
+const suites: TestSuite[] = [
+  DeploymentSuite,
+  /*ConnectionSuite,
   ContentSuite,
   ToolsSuite,
-  ILEErrorSuite
+  ILEErrorSuite*/
 ]
 
 export type TestSuite = {
   name: string
   tests: TestCase[]
+  before?: () => Promise<void>
+  after?: () => Promise<void>
 }
 
 export interface TestCase {
@@ -26,7 +26,7 @@ export interface TestCase {
   test: () => Promise<void>
 }
 
-let testSuitesTreeProvider : TestSuitesTreeProvider;
+let testSuitesTreeProvider: TestSuitesTreeProvider;
 export function initialise(context: vscode.ExtensionContext) {
   if (env.testing === `true`) {
     vscode.commands.executeCommand(`setContext`, `code-for-ibmi:testing`, true);
@@ -55,12 +55,29 @@ export function initialise(context: vscode.ExtensionContext) {
 
 async function runTests() {
   for (const suite of suites) {
-    console.log(`Running suite ${suite.name} (${suite.tests.length})`);
-    console.log();
-    for (const test of suite.tests) {      
-      await runTest(test);
+    try {
+      if (suite.before) {
+        console.log(`Pre-processing suite ${suite.name}`);
+        await suite.before();
+      }
+
+      console.log(`Running suite ${suite.name} (${suite.tests.length})`);
+      console.log();
+      for (const test of suite.tests) {
+        await runTest(test);
+      }      
     }
-  }  
+    catch (error: any) {
+      console.log(error);
+    }
+    finally{
+      if (suite.after) {
+        console.log();
+        console.log(`Post-processing suite ${suite.name}`);
+        await suite.after();
+      }
+    }
+  }
 }
 
 async function runTest(test: TestCase) {
@@ -73,7 +90,7 @@ async function runTest(test: TestCase) {
     test.status = "pass";
   }
 
-  catch (error: any){
+  catch (error: any) {
     console.log(error);
     test.status = "failed";
     test.failure = error.message;
@@ -84,7 +101,7 @@ async function runTest(test: TestCase) {
   }
 }
 
-function resetTests(){
+function resetTests() {
   suites.flatMap(ts => ts.tests).forEach(tc => {
     tc.status = undefined;
     tc.failure = undefined;
