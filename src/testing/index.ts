@@ -17,6 +17,7 @@ export type TestSuite = {
   tests: TestCase[]
   before?: () => Promise<void>
   after?: () => Promise<void>
+  failure?: string
 }
 
 export interface TestCase {
@@ -69,6 +70,8 @@ async function runTests() {
     }
     catch (error: any) {
       console.log(error);
+      suite.failure = error.message;      
+      testSuitesTreeProvider.refresh();
     }
     finally{
       if (suite.after) {

@@ -16,6 +16,8 @@ type FileInfo = {
     date: string
 }
 
+type FilesInfo = Map<string, FileInfo>;
+
 class File {
     readonly content: string;
     localPath?: vscode.Uri;
@@ -69,6 +71,10 @@ const fakeProject: Folder = {
 export const DeploymentSuite: TestSuite = {
     name: `Deployment tests`,
     before: async () => {
+        const features = instance.getConnection()?.remoteFeatures;
+        assert.ok(features?.stat, "stat is required to run Deployment test suite");
+        assert.ok(features?.md5sum, "md5sum is required to run Deployment test suite");
+
         const workspaceFolder = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0] : undefined;
         const tempDir = instance.getConfig()?.tempDir;
         assert.ok(workspaceFolder, "No workspace folder to work with");
@@ -81,19 +87,23 @@ export const DeploymentSuite: TestSuite = {
     tests: [
         {
             name: `Test 'All' deployment`, test: async () => {
-                await deploy("all");
-                await getLocalFilesInfo();
-                await getRemoteFilesInfo();
+                const locals = await getLocalFilesInfo();
+                const remotes = await deploy("all");
+                assertFilesInfoEquals(locals, remotes);
             }
         },
         {
             name: `Test 'Compare' deployment`, test: async () => {
-                await deploy("compare");
+                const locals = await getLocalFilesInfo();
+                const remotes = await deploy("compare");
+                assertFilesInfoEquals(locals, remotes);
             }
         },
         {
             name: `Test 'Changed' deployment`, test: async () => {
-                await deploy("changed");
+                const locals = await getLocalFilesInfo();
+                const remotes = await deploy("changed");
+                assertFilesInfoEquals(locals, remotes);
             }
         }
     ],
@@ -115,12 +125,13 @@ async function deploy(method: DeploymentMethod) {
     assert.ok(workspaceFolder, "No workspace folder");
     //Deploy only the fake project
     const ignoreRules = ignore().add([
-        `*`,
-        `!${basename(fakeProject.localPath.path)}/`,
-        `!${basename(fakeProject.localPath.path)}/**`
+        `*`, //Ignore all
+        `!${basename(fakeProject.localPath.path)}/`, //Allow directory (required)
+        `!${basename(fakeProject.localPath.path)}/**` //Allow content
     ]);
 
     assert.ok(await Deployment.deploy({ method, remotePath: fakeProject.remotePath, workspaceFolder, ignoreRules }), `"${method}" deployment failed`);
+    return await getRemoteFilesInfo();
 }
 
 async function createFolder(parent: vscode.Uri, remoteParent: string, folder: Folder) {
@@ -144,7 +155,7 @@ async function createFile(folder: vscode.Uri, remote: string, file: File): Promi
 }
 
 async function getLocalFilesInfo() {
-    const localFiles: Map<string, FileInfo> = new Map;
+    const localFiles: FilesInfo = new Map;
     for await (const file of await vscode.workspace.findFiles(new vscode.RelativePattern(fakeProject.localPath!, "**/*"))) {
         const path = posix.join(basename(fakeProject.localPath!.path), posix.relative(fakeProject.localPath!.path, file.path));
         localFiles.set(path, { date: "unused", md5: Tools.md5Hash(file) });
@@ -153,12 +164,12 @@ async function getLocalFilesInfo() {
 }
 
 async function getRemoteFilesInfo() {
-    const remoteFiles: Map<string, FileInfo> = new Map;
+    const remoteFiles: FilesInfo = new Map;
 
     //Get dates
     const stat = (await instance.getConnection()?.sendCommand({
         directory: fakeProject.remotePath,
-        command: `find . -type f -exec stat '{}' --printf="%n %s\\n" \\;`
+        command: `find . -type f -exec ${instance.getConnection()?.remoteFeatures.stat} '{}' --printf="%n %s\\n" \\;`
     }));
     assert.strictEqual(0, stat?.code, "Remote stat call failed");
     stat?.stdout.split("\n")
@@ -176,4 +187,13 @@ async function getRemoteFilesInfo() {
         .forEach(([md5, file]) => remoteFiles.get(file.substring(2))!.md5 = md5);
 
     return remoteFiles;
+}
+
+function assertFilesInfoEquals(locals: FilesInfo, remotes: FilesInfo) {
+    assert.strictEqual(locals.size, remotes.size, `Local (${locals.size}) and remote (${remotes.size}) files counts don't match`);
+    locals.forEach((info, file) => {
+        const remoteFile = remotes.get(file);
+        assert.ok(remoteFile, "Local file not found in remote files list");
+        assert.strictEqual(info.md5, remoteFile.md5, "Remote file hash doesn't match local's");
+    });
 }
