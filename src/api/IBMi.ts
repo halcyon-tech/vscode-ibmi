@@ -8,7 +8,7 @@ import { IBMiComponent } from "../components/component";
 import { CopyToImport } from "../components/copyToImport";
 import { CustomQSh } from '../components/cqsh';
 import { ComponentManager } from "../components/manager";
-import { CommandData, CommandResult, ConnectionData, IBMiMember, RemoteCommand, WrapResult } from "../typings";
+import { Action, CommandData, CommandResult, ConnectionData, IBMiMember, RemoteCommand, WrapResult } from "../typings";
 import { CompileTools } from "./CompileTools";
 import { ConnectionConfiguration } from "./Configuration";
 import IBMiContent from "./IBMiContent";
@@ -17,6 +17,9 @@ import { Tools } from './Tools';
 import * as configVars from './configVars';
 import { DebugConfiguration } from "./debug/config";
 import { debugPTFInstalled } from "./debug/server";
+import { ConfigFile } from './config/configFile';
+import { getProfilesConfig, ProfilesConfigFile } from './config/profiles';
+import { getActionsConfig } from './config/actions';
 
 export interface MemberParts extends IBMiMember {
   basename: string
@@ -53,6 +56,11 @@ const remoteApps = [ // All names MUST also be defined as key in 'remoteFeatures
 
 type DisconnectCallback = (conn: IBMi) => Promise<void>;
 
+interface ConnectionConfigFiles {
+  profiles: ConfigFile<ProfilesConfigFile>
+  actions: ConfigFile<Action[]>
+}
+
 export default class IBMi {
   static readonly CCSID_NOCONVERSION = 65535;
   static readonly CCSID_SYSVAL = -2;
@@ -71,6 +79,12 @@ export default class IBMi {
    * @deprecated Will become private in v3.0.0 - use {@link IBMi.getConfig} instead.
    */
   config?: ConnectionConfiguration.Parameters;
+
+  private configFiles: ConnectionConfigFiles = {
+    profiles: getProfilesConfig(this),
+    actions: getActionsConfig(this)
+  }
+
   /**
    * @deprecated Will become private in v3.0.0 - use {@link IBMi.getContent} instead.
    */
@@ -113,6 +127,10 @@ export default class IBMi {
    */
   setDisconnectedCallback(callback: DisconnectCallback) {
     this.disconnectedCallback = callback;
+  }
+
+  getConfigFile<T>(id: keyof ConnectionConfigFiles) {
+    return this.configFiles[id] as ConfigFile<T>;
   }
 
   get canUseCqsh() {
@@ -472,6 +490,14 @@ export default class IBMi {
           this.appendOutput(`\t${state.id.name} (${state.id.version}): ${state.state}\n`);
         }
         this.appendOutput(`\n`);
+
+        // Next, load in all the config files!
+
+        progress.report({
+          message: `Loading remote configuration files.`
+        });
+
+        await this.loadRemoteConfigs();
 
         progress.report({
           message: `Checking library list configuration.`
@@ -1115,6 +1141,20 @@ export default class IBMi {
     }
     finally {
       ConnectionConfiguration.update(this.config!);
+    }
+  }
+
+  async loadRemoteConfigs() {
+    for (const configFile in this.configFiles) {
+      const currentConfig = this.configFiles[configFile as keyof ConnectionConfigFiles];
+      
+      this.configFiles[configFile as keyof ConnectionConfigFiles].reset();
+
+      try {
+        await this.configFiles[configFile as keyof ConnectionConfigFiles].loadFromServer();
+      } catch (e) { }
+
+      this.appendOutput(`${configFile} config state: ` + JSON.stringify(currentConfig.getState()) + `\n`);
     }
   }
 

@@ -104,7 +104,7 @@ export default class IBMiContent {
    * @param encoding Optional encoding to write.
    */
   async writeStreamfileRaw(originalPath: string, content: Uint8Array, encoding?: string) {
-    const client = this.ibmi.client;
+    const client = this.ibmi.client!;
     const features = this.ibmi.remoteFeatures;
     const tmpobj = await tmpFile();
 
@@ -212,7 +212,7 @@ export default class IBMiContent {
     sourceFile = this.ibmi.upperCaseName(sourceFile);
     member = this.ibmi.upperCaseName(member);
 
-    const client = this.ibmi.client;
+    const client = this.ibmi.client!;
     const tmpobj = await tmpFile();
 
     let retry = false;
@@ -1094,19 +1094,19 @@ export default class IBMiContent {
   }
 
   async uploadFiles(files: { local: string | Uri, remote: string }[], options?: node_ssh.SSHPutFilesOptions) {
-    await this.ibmi.client.putFiles(files.map(f => { return { local: Tools.fileToPath(f.local), remote: f.remote } }), options);
+    await this.ibmi.client!.putFiles(files.map(f => { return { local: Tools.fileToPath(f.local), remote: f.remote } }), options);
   }
 
   async downloadFile(localFile: string | Uri, remoteFile: string) {
-    await this.ibmi.client.getFile(Tools.fileToPath(localFile), remoteFile);
+    await this.ibmi.client!.getFile(Tools.fileToPath(localFile), remoteFile);
   }
 
   async uploadDirectory(localDirectory: string | Uri, remoteDirectory: string, options?: node_ssh.SSHGetPutDirectoryOptions) {
-    await this.ibmi.client.putDirectory(Tools.fileToPath(localDirectory), remoteDirectory, options);
+    await this.ibmi.client!.putDirectory(Tools.fileToPath(localDirectory), remoteDirectory, options);
   }
 
   async downloadDirectory(localDirectory: string | Uri, remoteDirectory: string, options?: node_ssh.SSHGetPutDirectoryOptions) {
-    await this.ibmi.client.getDirectory(Tools.fileToPath(localDirectory), remoteDirectory, options);
+    await this.ibmi.client!.getDirectory(Tools.fileToPath(localDirectory), remoteDirectory, options);
   }
 }
 

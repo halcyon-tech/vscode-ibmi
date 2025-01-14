@@ -47,9 +47,17 @@
 		"jsonValidation": [
 			{
 				"fileMatch": [
-					".vscode/actions.json"
+					".vscode/actions.json",
+					"/etc/.vscode/actions.json"
 				],
 				"url": "./schemas/actions.json"
+			},
+			{
+				"fileMatch": [
+					".vscode/profiles.json",
+					"/etc/.vscode/profiles.json"
+				],
+				"url": "./schemas/profiles.json"
 			}
 		],
 		"configuration": {
@@ -1241,6 +1249,13 @@
 				"title": "Set Active Profile",
 				"category": "IBM i",
 				"icon": "$(arrow-circle-right)"
+			},
+			{
+				"command": "code-for-ibmi.profiles.copyAsJson",
+				"enablement": "code-for-ibmi:connected",
+				"title": "Copy as JSON",
+				"category": "IBM i",
+				"icon": "$(clippy)"
 			},
 			{
 				"command": "code-for-ibmi.searchSourceFile",
@@ -2536,7 +2551,7 @@
 				},
 				{
 					"command": "code-for-ibmi.loadConnectionProfile",
-					"when": "view == profilesView && viewItem == profile",
+					"when": "view == profilesView && (viewItem == profile || viewItem == localProfile)",
 					"group": "inline"
 				},
 				{
@@ -2578,6 +2593,11 @@
 					"command": "code-for-ibmi.saveConnectionProfile",
 					"when": "view == profilesView && viewItem == profile",
 					"group": "profiles@1"
+				},
+				{
+					"command": "code-for-ibmi.profiles.copyAsJson",
+					"when": "view == profilesView && viewItem == profile",
+					"group": "profiles@3"
 				},
 				{
 					"command": "code-for-ibmi.manageCommandProfile",

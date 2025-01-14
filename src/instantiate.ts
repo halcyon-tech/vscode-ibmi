@@ -15,6 +15,7 @@ import { QSysFS } from "./filesystems/qsys/QSysFs";
 import { SEUColorProvider } from "./languages/general/SEUColorProvider";
 import { ActionsUI } from './webviews/actions';
 import { VariablesUI } from "./webviews/variables";
+import { getAllProfiles } from './views/ProfilesView';
 
 export let instance: Instance;
 
@@ -127,7 +128,6 @@ async function updateConnectedBar() {
 }
 
 async function onConnected() {
-  const config = instance.getConnection()?.getConfig();
   [
     connectedBarItem,
     disconnectBarItem,
@@ -135,8 +135,9 @@ async function onConnected() {
 
   updateConnectedBar();
 
-  // Enable the profile view if profiles exist.
-  vscode.commands.executeCommand(`setContext`, `code-for-ibmi:hasProfiles`, (config?.connectionProfiles || []).length > 0);
+  const connection = instance.getConnection()!;
+  const profiles = await getAllProfiles(connection);
+  vscode.commands.executeCommand(`setContext`, `code-for-ibmi:hasProfiles`, profiles.length > 0);
 }
 
 async function onDisconnected() {
