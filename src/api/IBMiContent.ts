@@ -5,7 +5,7 @@ import tmp from 'tmp';
 import util from 'util';
 import * as node_ssh from "node-ssh";
 import { GetMemberInfo } from './components/getMemberInfo';
-import { AttrOperands, CommandResult, IBMiError, IBMiMember, IBMiObject, IFSFile, QsysPath, SpecialAuthorities } from './types';
+import { AttrOperands, CommandResult, IBMiError, IBMiMember, IBMiObject, IFSFile, ProgramExportImportInfo, ModuleExport, QsysPath, SpecialAuthorities } from './types';
 import { FilterType, parseFilter, singleGenericName } from './Filter';
 import { default as IBMi } from './IBMi';
 import { Tools } from './Tools';
@@ -630,6 +630,65 @@ export default class IBMiContent {
           return ((ObjectTypes.get(a.type) || 0) - (ObjectTypes.get(b.type) || 0)) || a.name.localeCompare(b.name);
         }
       });
+  }
+
+  /**
+   * @param object IBMiObject to get export and import info for
+   * @returns an array of ProgramExportImportInfo
+   */
+  async getProgramExportImportInfo(library: string, name: string, type: string): Promise<ProgramExportImportInfo[]> {
+    if (!['*PGM', '*SRVPGM'].includes(type)) {
+      return [];
+    }
+    const results = await this.ibmi.runSQL(
+      [
+        `select PROGRAM_LIBRARY, PROGRAM_NAME, OBJECT_TYPE, SYMBOL_NAME, SYMBOL_USAGE,`,
+        `  ARGUMENT_OPTIMIZATION, DATA_ITEM_SIZE`,
+        `from qsys2.program_export_import_info`,
+        `where program_library = '${library}' and program_name = '${name}' `,
+        `and object_type = '${type}'`
+      ].join("\n")
+    );
+    if (results.length) {
+      return results.map(result => ({
+        program_library: result.PROGRAM_LIBRARY,
+        program_name: result.PROGRAM_NAME,
+        object_type: result.OBJECT_TYPE,
+        symbol_name: result.SYMBOL_NAME,
+        symbol_usage: result.SYMBOL_USAGE,
+        argument_optimization: result.ARGUMENT_OPTIMIZATION,
+        data_item_size: result.DATA_ITEM_SIZE
+      } as ProgramExportImportInfo));
+    } else {
+      return [];
+    }
+  }
+
+  /**
+   * @param object IBMiObject to get module exports for
+   * @returns an array of ModuleExport
+   */
+  async getModuleExports(library: string, name: string): Promise<ModuleExport[]> {
+    const outfile: string = Tools.makeid().toUpperCase();
+    const results = await this.runStatements(
+      `@DSPMOD MODULE(${library}/${name}) DETAIL(*EXPORT) OUTPUT(*OUTFILE) OUTFILE(QTEMP/${outfile})`,
+      [
+        `select EXLBNM as MODULE_LIBRARY, EXMONM as MODULE_NAME, EXMOAT as MODULE_ATTR, EXSYNM as SYMBOL_NAME,`,
+        `  case EXSYTY when '0' then 'PROCEDURE' when '1' then 'DATA' end as SYMBOL_TYPE, EXOPPP as ARGUMENT_OPTIMIZATION`,
+        ` from QTEMP.${outfile}`
+      ].join("\n")
+    );
+    if (results.length) {
+      return results.map(result => ({
+        module_library: result.MODULE_LIBRARY,
+        module_name: result.MODULE_NAME,
+        module_attr: result.MODULE_ATTR,
+        symbol_name: result.SYMBOL_NAME,
+        symbol_type: result.SYMBOL_TYPE,
+        argument_optimization: result.ARGUMENT_OPTIMIZATION
+      } as ModuleExport));
+    }
+    return [];
   }
 
   /**
